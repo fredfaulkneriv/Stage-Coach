@@ -27,6 +27,7 @@ export type SessionMode =
   | 'mirror'
   | 'presentation_sim'
   | 'hot_seat'
+  | 'pacer'
 
 export type GuidedDrillType =
   | 'hook'
@@ -92,6 +93,8 @@ export interface Session {
   summary: string | null
   xp_earned: number
   r2_key: string | null
+  pacer_script: string | null
+  pacer_target_wpm: number | null
   created_at: string
 }
 

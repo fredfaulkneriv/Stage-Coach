@@ -31,6 +31,9 @@ export async function POST(req: Request) {
       : 'freestyle'
     const guided_drill = (formData.get('guided_drill') as GuidedDrillType | null) ?? null
     const presentation_audience = (formData.get('presentation_audience') as PresentationAudience | null) ?? null
+    const pacer_script = (formData.get('pacer_script') as string | null) ?? null
+    const pacer_target_wpm_str = formData.get('pacer_target_wpm') as string | null
+    const pacer_target_wpm = pacer_target_wpm_str ? parseInt(pacer_target_wpm_str, 10) : null
 
     if (!audioFile) {
       return NextResponse.json<ApiResponse>(
@@ -90,6 +93,8 @@ export async function POST(req: Request) {
         mode,
         guided_drill,
         presentation_audience,
+        pacer_script,
+        pacer_target_wpm,
       })
     } catch (analyzeError) {
       console.error('Analysis error:', analyzeError)
@@ -128,8 +133,9 @@ export async function POST(req: Request) {
         id, user_id, mode, guided_drill, presentation_audience, topic, duration_seconds, transcript,
         wpm, filler_word_count, filler_word_percentage, filler_words_found,
         pacing_score, clarity_score, structure_score, overall_score,
-        coaching_feedback, summary, xp_earned, r2_key, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        coaching_feedback, summary, xp_earned, r2_key,
+        pacer_script, pacer_target_wpm, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         sessionId,
         userId,
@@ -151,6 +157,8 @@ export async function POST(req: Request) {
         analysis.summary,
         xp_earned,
         r2Key,
+        pacer_script ?? null,
+        pacer_target_wpm ?? null,
         now,
       ]
     )
@@ -212,6 +220,8 @@ export async function POST(req: Request) {
       summary: analysis.summary,
       xp_earned,
       r2_key: r2Key,
+      pacer_script: pacer_script ?? null,
+      pacer_target_wpm: pacer_target_wpm ?? null,
       created_at: now,
     }
 

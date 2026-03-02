@@ -4,6 +4,8 @@ import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AppShell } from '@/components/app-shell'
 import { Recorder } from '@/components/session/recorder'
+import { PacerRecorder } from '@/components/session/pacer-recorder'
+import { PACER_SCRIPTS } from '@/lib/pacer-scripts'
 import type { GuidedDrill, GuidedDrillType, PresentationAudience } from '@/lib/types'
 
 const GUIDED_DRILLS: Record<GuidedDrillType, GuidedDrill> = {
@@ -79,6 +81,37 @@ function RecordContent() {
   const audienceKey = searchParams.get('audience') as PresentationAudience | null
   const presentationAudience = mode === 'presentation_sim' ? audienceKey : null
 
+  // Pacer params
+  const scriptId = searchParams.get('script_id')
+  const targetWpmRaw = searchParams.get('target_wpm')
+  const targetWpm = targetWpmRaw ? parseInt(targetWpmRaw, 10) : 140
+  const pacerScript = mode === 'pacer' && scriptId
+    ? PACER_SCRIPTS.find((s) => s.id === scriptId) ?? PACER_SCRIPTS[0]
+    : null
+
+  // ── Pacer mode UI ──────────────────────────────────────────────────────────
+  if (mode === 'pacer' && pacerScript) {
+    return (
+      <AppShell>
+        <div style={{ paddingTop: '0.5rem' }}>
+          <div style={{ marginBottom: '1.25rem', textAlign: 'center' }}>
+            <p style={{ fontSize: '0.75rem', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4, fontFamily: 'Syne, sans-serif', fontWeight: 700 }}>
+              Pacer
+            </p>
+            <h1 style={{ fontSize: '1.1rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
+              {pacerScript.title}
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 4 }}>
+              {targetWpm} WPM · {pacerScript.typeLabel}
+            </p>
+          </div>
+          <PacerRecorder script={pacerScript} targetWpm={targetWpm} />
+        </div>
+      </AppShell>
+    )
+  }
+
+  // ── Standard modes ─────────────────────────────────────────────────────────
   return (
     <AppShell>
       <div style={{ paddingTop: '0.5rem' }}>

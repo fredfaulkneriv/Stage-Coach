@@ -74,12 +74,18 @@ export function ScorecardView({ session, user, recentBadges, isNew }: ScorecardV
   }, [isNew])
 
   const isStutterAware = user.speech_profile === 'stutter_aware'
+  const isPacer = session.mode === 'pacer'
 
   // For stutter_aware, overall score is avg of clarity + structure
   const displayScore =
     isStutterAware && session.clarity_score != null && session.structure_score != null
       ? Math.round((session.clarity_score + session.structure_score) / 2)
       : (session.overall_score ?? 0)
+
+  // Pacer remaps score labels
+  const pacingLabel = isPacer ? 'Pace Match' : 'Pacing'
+  const clarityLabel = isPacer ? 'Accuracy' : 'Clarity'
+  const structureLabel = isPacer ? 'Flow' : 'Structure'
 
   return (
     <div style={{ paddingTop: '0.5rem' }}>
@@ -89,7 +95,7 @@ export function ScorecardView({ session, user, recentBadges, isNew }: ScorecardV
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Session Complete
           </p>
-          {(session.mode === 'guided' || session.mode === 'presentation_sim') && (
+          {(session.mode === 'guided' || session.mode === 'presentation_sim' || session.mode === 'pacer') && (
             <span
               style={{
                 fontSize: '0.65rem',
@@ -104,7 +110,7 @@ export function ScorecardView({ session, user, recentBadges, isNew }: ScorecardV
                 letterSpacing: '0.04em',
               }}
             >
-              {session.mode === 'guided' ? 'Guided Drill' : 'Presentation Sim'}
+              {session.mode === 'guided' ? 'Guided Drill' : session.mode === 'presentation_sim' ? 'Presentation Sim' : 'Pacer'}
             </span>
           )}
         </div>
@@ -124,6 +130,11 @@ export function ScorecardView({ session, user, recentBadges, isNew }: ScorecardV
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 2 }}>
             {AUDIENCE_LABELS[session.presentation_audience as PresentationAudience]?.emoji}{' '}
             {AUDIENCE_LABELS[session.presentation_audience as PresentationAudience]?.label}
+          </p>
+        )}
+        {session.mode === 'pacer' && session.pacer_target_wpm != null && (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 2 }}>
+            🎯 Target: {session.pacer_target_wpm} WPM
           </p>
         )}
         <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 4 }}>
@@ -174,10 +185,10 @@ export function ScorecardView({ session, user, recentBadges, isNew }: ScorecardV
 
       {/* Score sub-cards */}
       <div style={{ display: 'flex', gap: 8, marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-        <SmallScoreCard label="Pacing" score={session.pacing_score} />
-        <SmallScoreCard label="Clarity" score={session.clarity_score} />
-        <SmallScoreCard label="Structure" score={session.structure_score} />
-        {!isStutterAware && (
+        <SmallScoreCard label={pacingLabel} score={session.pacing_score} />
+        <SmallScoreCard label={clarityLabel} score={session.clarity_score} />
+        <SmallScoreCard label={structureLabel} score={session.structure_score} />
+        {!isStutterAware && !isPacer && (
           <SmallScoreCard
             label={`Fillers${session.filler_word_count != null ? ` (${session.filler_word_count})` : ''}`}
             score={
@@ -189,8 +200,8 @@ export function ScorecardView({ session, user, recentBadges, isNew }: ScorecardV
         )}
       </div>
 
-      {/* WPM + Filler pills — standard only */}
-      {!isStutterAware && (
+      {/* WPM + Filler pills — standard only (not Pacer, not stutter_aware) */}
+      {!isStutterAware && !isPacer && (
         <div className="card" style={{ padding: '1rem', marginBottom: '1.25rem' }}>
           {session.wpm != null && (
             <div style={{ marginBottom: 12 }}>

@@ -101,6 +101,40 @@ In your coaching_feedback, include:
 `
 }
 
+function buildPacerSection(pacerScript: string, targetWpm: number, durationSeconds: number): string {
+  const words = pacerScript.split(/\s+/).filter(Boolean)
+  const expectedDuration = Math.round((words.length / targetWpm) * 60)
+  return `
+SESSION MODE: Pacer
+The speaker was reading aloud a provided script at a target pace of ${targetWpm} WPM.
+Expected duration: approximately ${expectedDuration} seconds.
+Actual recording duration: ${durationSeconds} seconds.
+
+Target Script (what they should have said):
+---
+${pacerScript}
+---
+
+Evaluate the following — DO NOT evaluate tone, intonation, vocal variety, or expressiveness:
+1. Reading accuracy: how closely the speaker's words match the target script word-for-word
+2. Pace adherence: how close their actual duration (${durationSeconds}s) was to expected (${expectedDuration}s). Closer = higher pacing_score.
+3. Added filler words: any "um", "uh", "like", "you know", etc. inserted that are NOT in the script
+4. Reading flow: smooth rhythm without long stumbles, false starts, or repeated sections
+
+Score mapping for Pacer mode (override your normal scoring):
+- pacing_score: pace adherence (0-100). Use formula: max(0, 100 - abs(${durationSeconds} - ${expectedDuration}) / ${expectedDuration} * 200). Perfect timing = 100.
+- clarity_score: reading accuracy (0-100, estimate word-match % from comparing transcript to script)
+- structure_score: reading flow and smoothness (no jarring restarts, consistent rhythm, 0-100)
+- overall_score: weighted average (40% pacing_score + 40% clarity_score + 20% structure_score)
+
+In coaching_feedback:
+- One "strength" about what they did well (accuracy, pace match, or smoothness)
+- One "improvement" for their biggest gap (wrong words, pace too fast/slow, or stumbles)
+- One "tip" for improving their next Pacer run
+- In the summary: state their actual WPM (transcript word count ÷ actual seconds × 60), compare to target ${targetWpm} WPM, and give one priority focus for next run
+`
+}
+
 function buildSystemPrompt(
   coachingStyle: CoachingStyle,
   goal: Goal,
@@ -108,7 +142,9 @@ function buildSystemPrompt(
   mode?: string,
   guidedDrill?: GuidedDrillType | null,
   presentationAudience?: PresentationAudience | null,
-  durationSeconds?: number
+  durationSeconds?: number,
+  pacerScript?: string | null,
+  pacerTargetWpm?: number | null
 ): string {
   return `You are a certified speech and presentation coach with credentials from Toastmasters and the Professional Speakers Association. You are analyzing a recorded speech session to provide structured, actionable coaching feedback.
 
@@ -135,6 +171,8 @@ ${
 * Flag filler words: um, uh, like, you know, so, basically, literally, right, okay — but do not flag natural connective language`
 }
 
+For stutter_aware profiles, wpm and filler fields will be present in the JSON but set to null. Do not populate them.${mode === 'guided' && guidedDrill ? buildGuidedDrillSection(guidedDrill) : ''}${mode === 'presentation_sim' && presentationAudience ? buildPresentationSimSection(presentationAudience, durationSeconds ?? 180) : ''}${mode === 'pacer' && pacerScript && pacerTargetWpm ? buildPacerSection(pacerScript, pacerTargetWpm, durationSeconds ?? 120) : ''}
+
 Return ONLY valid JSON. No markdown, no explanation, no wrapper text. Exactly this shape:
 {
   "wpm": 145,
@@ -153,7 +191,7 @@ Return ONLY valid JSON. No markdown, no explanation, no wrapper text. Exactly th
   "summary": "A solid session with good energy. Your pacing is a real strength. Primary focus for next session: filler word reduction in transitions."
 }
 
-For stutter_aware profiles, wpm and filler fields will be present in the JSON but set to null. Do not populate them.${mode === 'guided' && guidedDrill ? buildGuidedDrillSection(guidedDrill) : ''}${mode === 'presentation_sim' && presentationAudience ? buildPresentationSimSection(presentationAudience, durationSeconds ?? 180) : ''}`
+`
 }
 
 function buildUserPrompt(
@@ -162,7 +200,8 @@ function buildUserPrompt(
   speechProfile: SpeechProfile,
   mode?: string,
   guidedDrill?: GuidedDrillType | null,
-  presentationAudience?: PresentationAudience | null
+  presentationAudience?: PresentationAudience | null,
+  pacerTargetWpm?: number | null
 ): string {
   const minutes = Math.round(durationSeconds / 60)
   const drillContext = mode === 'guided' && guidedDrill
@@ -171,7 +210,10 @@ function buildUserPrompt(
   const simContext = mode === 'presentation_sim' && presentationAudience
     ? `\nThis was a ${minutes}-minute presentation simulation for a ${presentationAudience} audience. Evaluate as a full presentation run-through.\n`
     : ''
-  return `Please analyze this speech transcript from a ${minutes}-minute recording session.${drillContext}${simContext}
+  const pacerContext = mode === 'pacer' && pacerTargetWpm
+    ? `\nThis is a Pacer session. The speaker read a script at a target of ${pacerTargetWpm} WPM. Compare this transcript to the target script provided in the system prompt and apply the Pacer scoring rubric.\n`
+    : ''
+  return `Please analyze this speech transcript from a ${minutes}-minute recording session.${drillContext}${simContext}${pacerContext}
 
 ${speechProfile === 'standard' ? `Recording duration: ${durationSeconds} seconds. Use this to calculate WPM from the transcript word count.` : ''}
 
@@ -192,17 +234,19 @@ export async function analyzeSpeech(params: {
   mode?: string
   guided_drill?: GuidedDrillType | null
   presentation_audience?: PresentationAudience | null
+  pacer_script?: string | null
+  pacer_target_wpm?: number | null
 }): Promise<SpeechAnalysis> {
-  const { transcript, duration_seconds, coaching_style, speech_profile, goal, mode, guided_drill, presentation_audience } = params
+  const { transcript, duration_seconds, coaching_style, speech_profile, goal, mode, guided_drill, presentation_audience, pacer_script, pacer_target_wpm } = params
 
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1500,
-    system: buildSystemPrompt(coaching_style, goal, speech_profile, mode, guided_drill, presentation_audience, duration_seconds),
+    system: buildSystemPrompt(coaching_style, goal, speech_profile, mode, guided_drill, presentation_audience, duration_seconds, pacer_script, pacer_target_wpm),
     messages: [
       {
         role: 'user',
-        content: buildUserPrompt(transcript, duration_seconds, speech_profile, mode, guided_drill, presentation_audience),
+        content: buildUserPrompt(transcript, duration_seconds, speech_profile, mode, guided_drill, presentation_audience, pacer_target_wpm),
       },
     ],
   })
