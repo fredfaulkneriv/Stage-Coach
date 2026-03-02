@@ -1,7 +1,13 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
-};
+  // All pages that use auth() are dynamically rendered by default.
+  // Increase the body size limit for audio uploads.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '25mb',
+    },
+  },
+}
 
-export default nextConfig;
+export default nextConfig
