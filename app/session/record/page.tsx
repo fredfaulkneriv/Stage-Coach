@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { AppShell } from '@/components/app-shell'
 import { Recorder } from '@/components/session/recorder'
-import type { GuidedDrill, GuidedDrillType } from '@/lib/types'
+import type { GuidedDrill, GuidedDrillType, PresentationAudience } from '@/lib/types'
 
 const GUIDED_DRILLS: Record<GuidedDrillType, GuidedDrill> = {
   hook: {
@@ -76,6 +76,8 @@ function RecordContent() {
   const mode = searchParams.get('mode') ?? 'freestyle'
   const drillKey = searchParams.get('drill') as GuidedDrillType | null
   const guidedDrill = mode === 'guided' && drillKey ? GUIDED_DRILLS[drillKey] ?? null : null
+  const audienceKey = searchParams.get('audience') as PresentationAudience | null
+  const presentationAudience = mode === 'presentation_sim' ? audienceKey : null
 
   return (
     <AppShell>
@@ -95,6 +97,15 @@ function RecordContent() {
                 </p>
               )}
             </>
+          ) : mode === 'presentation_sim' ? (
+            <>
+              <p style={{ fontSize: '0.75rem', color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4, fontFamily: 'Syne, sans-serif', fontWeight: 700 }}>
+                Presentation Sim
+              </p>
+              <h1 style={{ fontSize: '1.1rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                {topic ?? 'Full Run-Through'}
+              </h1>
+            </>
           ) : (
             <>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
@@ -106,7 +117,7 @@ function RecordContent() {
             </>
           )}
         </div>
-        <Recorder topic={topic} maxDuration={duration} mode={mode} guidedDrill={guidedDrill} />
+        <Recorder topic={topic} maxDuration={duration} mode={mode} guidedDrill={guidedDrill} presentationAudience={presentationAudience} />
       </div>
     </AppShell>
   )

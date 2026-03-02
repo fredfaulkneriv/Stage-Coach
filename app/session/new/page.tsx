@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppShell } from '@/components/app-shell'
 import { Mic, Lock, ChevronDown, ChevronUp } from 'lucide-react'
-import type { GuidedDrill, GuidedDrillType } from '@/lib/types'
+import type { GuidedDrill, GuidedDrillType, PresentationAudience } from '@/lib/types'
 
 const SUGGESTED_TOPICS = [
   "Explain your work to someone who doesn't know your industry",
@@ -21,11 +21,18 @@ const DURATIONS = [
   { value: 300, label: '5 min' },
 ]
 
+const PRESENTATION_DURATIONS = [
+  { value: 180, label: '3 min' },
+  { value: 300, label: '5 min' },
+  { value: 600, label: '10 min' },
+  { value: 900, label: '15 min' },
+]
+
 const MODES = [
   { value: 'freestyle', label: 'Freestyle', description: 'Speak freely on any topic', available: true },
   { value: 'guided', label: 'Guided Drills', description: 'Practice a specific speech structure', available: true },
   { value: 'mirror', label: 'Mirror Mode', description: 'See yourself speak', available: false },
-  { value: 'presentation_sim', label: 'Presentation Sim', description: 'Full run-through', available: false },
+  { value: 'presentation_sim', label: 'Presentation Sim', description: 'Full run-through with audience coaching', available: true },
   { value: 'hot_seat', label: 'Hot Seat', description: 'Live Q&A practice', available: false },
 ]
 
@@ -39,7 +46,7 @@ const GUIDED_DRILLS: GuidedDrill[] = [
       { label: 'Grabber', hint: 'Open with a stat, bold question, or 1-sentence story' },
       { label: 'Problem', hint: 'State the tension or problem clearly' },
       { label: 'Relevance', hint: 'Bridge to why this matters to your audience' },
-      { label: 'Preview', hint: 'Tell them what you\'re about to cover' },
+      { label: 'Preview', hint: "Tell them what you're about to cover" },
     ],
   },
   {
@@ -92,32 +99,42 @@ const GUIDED_DRILLS: GuidedDrill[] = [
   },
 ]
 
+const AUDIENCES: { value: PresentationAudience; label: string; emoji: string; description: string }[] = [
+  { value: 'executives', label: 'Executives', emoji: '💼', description: 'C-suite or board — brevity and impact matter most' },
+  { value: 'general', label: 'General', emoji: '👥', description: 'Mixed audience — balance clarity with substance' },
+  { value: 'technical', label: 'Technical', emoji: '💻', description: 'Engineers or analysts — precision and depth valued' },
+  { value: 'investors', label: 'Investors', emoji: '📈', description: 'Pitch scenario — narrative, confidence, and ask' },
+  { value: 'students', label: 'Students', emoji: '🎓', description: 'Learning context — clarity and engagement first' },
+  { value: 'clients', label: 'Clients', emoji: '🤝', description: 'Sales or client meeting — trust and benefits-led' },
+]
+
 export default function NewSessionPage() {
   const router = useRouter()
   const [selectedMode, setSelectedMode] = useState('freestyle')
   const [selectedDrill, setSelectedDrill] = useState<GuidedDrillType>('hook')
   const [expandedDrill, setExpandedDrill] = useState<GuidedDrillType | null>(null)
+  const [selectedAudience, setSelectedAudience] = useState<PresentationAudience>('general')
   const [topic, setTopic] = useState('')
   const [duration, setDuration] = useState(120)
 
   const activeDrill = GUIDED_DRILLS.find((d) => d.type === selectedDrill)!
+  const currentDurations = selectedMode === 'presentation_sim' ? PRESENTATION_DURATIONS : DURATIONS
 
   function handleBegin() {
     const params = new URLSearchParams()
     if (topic) params.set('topic', topic)
     params.set('duration', String(duration))
     params.set('mode', selectedMode)
-    if (selectedMode === 'guided') {
-      params.set('drill', selectedDrill)
-    }
+    if (selectedMode === 'guided') params.set('drill', selectedDrill)
+    if (selectedMode === 'presentation_sim') params.set('audience', selectedAudience)
     router.push(`/session/record?${params.toString()}`)
   }
 
   function handleModeSelect(value: string) {
     setSelectedMode(value)
-    if (value === 'guided') {
-      setDuration(activeDrill.recommendedDuration)
-    }
+    if (value === 'guided') setDuration(activeDrill.recommendedDuration)
+    else if (value === 'presentation_sim') setDuration(300)
+    else setDuration(120)
   }
 
   function handleDrillSelect(drill: GuidedDrill) {
@@ -159,40 +176,15 @@ export default function NewSessionPage() {
                   transition: 'all 0.15s',
                 }}
               >
-                <Mic
-                  size={18}
-                  color={selectedMode === value ? 'var(--accent)' : 'var(--text-muted)'}
-                />
+                <Mic size={18} color={selectedMode === value ? 'var(--accent)' : 'var(--text-muted)'} />
                 <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      fontFamily: 'Syne, sans-serif',
-                      fontWeight: 700,
-                      fontSize: '0.9375rem',
-                      color: selectedMode === value ? 'var(--accent)' : 'var(--text-primary)',
-                    }}
-                  >
+                  <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '0.9375rem', color: selectedMode === value ? 'var(--accent)' : 'var(--text-primary)' }}>
                     {label}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    {description}
-                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{description}</div>
                 </div>
                 {!available && (
-                  <span
-                    style={{
-                      fontSize: '0.65rem',
-                      background: 'var(--bg-surface)',
-                      color: 'var(--text-muted)',
-                      padding: '2px 8px',
-                      borderRadius: 99,
-                      border: '1px solid var(--border-subtle)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
+                  <span style={{ fontSize: '0.65rem', background: 'var(--bg-surface)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: 99, border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
                     <Lock size={10} />
                     Coming Soon
                   </span>
@@ -202,18 +194,10 @@ export default function NewSessionPage() {
           </div>
         </section>
 
-        {/* Guided Drill picker — shown only when guided mode is selected */}
+        {/* Guided Drill picker */}
         {selectedMode === 'guided' && (
           <section style={{ marginBottom: '1.75rem' }}>
-            <h2
-              style={{
-                fontSize: '0.875rem',
-                color: 'var(--text-muted)',
-                marginBottom: 10,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
+            <h2 style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Drill
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -221,111 +205,25 @@ export default function NewSessionPage() {
                 const isSelected = selectedDrill === drill.type
                 const isExpanded = expandedDrill === drill.type
                 return (
-                  <div
-                    key={drill.type}
-                    style={{
-                      background: isSelected ? 'var(--accent-muted)' : 'var(--bg-card)',
-                      border: `1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                      borderRadius: '0.75rem',
-                      overflow: 'hidden',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {/* Drill header row */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '0.75rem 1rem',
-                        gap: 10,
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => handleDrillSelect(drill)}
-                    >
-                      {/* Radio dot */}
-                      <div
-                        style={{
-                          width: 16,
-                          height: 16,
-                          borderRadius: '50%',
-                          border: `2px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                          background: isSelected ? 'var(--accent)' : 'transparent',
-                          flexShrink: 0,
-                          transition: 'all 0.15s',
-                        }}
-                      />
+                  <div key={drill.type} style={{ background: isSelected ? 'var(--accent-muted)' : 'var(--bg-card)', border: `1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: '0.75rem', overflow: 'hidden', transition: 'all 0.15s' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0.75rem 1rem', gap: 10, cursor: 'pointer' }} onClick={() => handleDrillSelect(drill)}>
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', border: `2px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`, background: isSelected ? 'var(--accent)' : 'transparent', flexShrink: 0, transition: 'all 0.15s' }} />
                       <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            fontFamily: 'Syne, sans-serif',
-                            fontWeight: 700,
-                            fontSize: '0.9rem',
-                            color: isSelected ? 'var(--accent)' : 'var(--text-primary)',
-                          }}
-                        >
-                          {drill.name}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {drill.description}
-                        </div>
+                        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '0.9rem', color: isSelected ? 'var(--accent)' : 'var(--text-primary)' }}>{drill.name}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{drill.description}</div>
                       </div>
-                      {/* Toggle steps preview */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setExpandedDrill(isExpanded ? null : drill.type)
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--text-muted)',
-                          padding: 4,
-                          display: 'flex',
-                          alignItems: 'center',
-                        }}
-                      >
+                      <button onClick={(e) => { e.stopPropagation(); setExpandedDrill(isExpanded ? null : drill.type) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'flex', alignItems: 'center' }}>
                         {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     </div>
-                    {/* Expanded steps preview */}
                     {isExpanded && (
-                      <div
-                        style={{
-                          padding: '0 1rem 0.75rem 2.5rem',
-                          borderTop: '1px solid var(--border-subtle)',
-                          paddingTop: '0.625rem',
-                        }}
-                      >
+                      <div style={{ padding: '0 1rem 0.75rem 2.5rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.625rem' }}>
                         {drill.steps.map((step, i) => (
-                          <div
-                            key={i}
-                            style={{
-                              display: 'flex',
-                              gap: 8,
-                              marginBottom: i < drill.steps.length - 1 ? 6 : 0,
-                              alignItems: 'flex-start',
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: '0.7rem',
-                                fontFamily: 'Syne, sans-serif',
-                                fontWeight: 700,
-                                color: 'var(--accent)',
-                                minWidth: 16,
-                                marginTop: 1,
-                              }}
-                            >
-                              {i + 1}.
-                            </span>
+                          <div key={i} style={{ display: 'flex', gap: 8, marginBottom: i < drill.steps.length - 1 ? 6 : 0, alignItems: 'flex-start' }}>
+                            <span style={{ fontSize: '0.7rem', fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', minWidth: 16, marginTop: 1 }}>{i + 1}.</span>
                             <div>
-                              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                {step.label}
-                              </span>
-                              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: 4 }}>
-                                — {step.hint}
-                              </span>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>{step.label}</span>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: 4 }}>— {step.hint}</span>
                             </div>
                           </div>
                         ))}
@@ -338,17 +236,44 @@ export default function NewSessionPage() {
           </section>
         )}
 
+        {/* Presentation Sim — Audience picker */}
+        {selectedMode === 'presentation_sim' && (
+          <section style={{ marginBottom: '1.75rem' }}>
+            <h2 style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Audience
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {AUDIENCES.map(({ value, label, emoji, description }) => {
+                const isSelected = selectedAudience === value
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setSelectedAudience(value)}
+                    style={{
+                      padding: '0.75rem',
+                      background: isSelected ? 'var(--accent-muted)' : 'var(--bg-card)',
+                      border: `1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border-subtle)'}`,
+                      borderRadius: '0.75rem',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.25rem', marginBottom: 4 }}>{emoji}</div>
+                    <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '0.85rem', color: isSelected ? 'var(--accent)' : 'var(--text-primary)', marginBottom: 2 }}>
+                      {label}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>{description}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Topic input */}
         <section style={{ marginBottom: '1.75rem' }}>
-          <h2
-            style={{
-              fontSize: '0.875rem',
-              color: 'var(--text-muted)',
-              marginBottom: 10,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
+          <h2 style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Topic <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
           </h2>
           <textarea
@@ -357,22 +282,12 @@ export default function NewSessionPage() {
             placeholder={
               selectedMode === 'guided'
                 ? `What will you practice ${activeDrill.name} on?`
+                : selectedMode === 'presentation_sim'
+                ? 'What is your presentation about?'
                 : 'What will you speak about?'
             }
             rows={2}
-            style={{
-              width: '100%',
-              padding: '0.75rem 1rem',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '0.75rem',
-              color: 'var(--text-primary)',
-              fontSize: '0.9375rem',
-              fontFamily: 'DM Sans, sans-serif',
-              outline: 'none',
-              resize: 'none',
-              marginBottom: 10,
-            }}
+            style={{ width: '100%', padding: '0.75rem 1rem', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '0.75rem', color: 'var(--text-primary)', fontSize: '0.9375rem', fontFamily: 'DM Sans, sans-serif', outline: 'none', resize: 'none', marginBottom: 10 }}
             onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
             onBlur={(e) => (e.target.style.borderColor = 'var(--border-subtle)')}
           />
@@ -382,28 +297,9 @@ export default function NewSessionPage() {
               <button
                 key={t}
                 onClick={() => setTopic(t)}
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '0.5rem',
-                  padding: '0.5rem 0.75rem',
-                  color: 'var(--text-muted)',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'color 0.15s, border-color 0.15s',
-                  fontFamily: 'DM Sans, sans-serif',
-                }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget
-                  el.style.color = 'var(--text-primary)'
-                  el.style.borderColor = 'var(--accent)33'
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget
-                  el.style.color = 'var(--text-muted)'
-                  el.style.borderColor = 'var(--border-subtle)'
-                }}
+                style={{ background: 'none', border: '1px solid var(--border-subtle)', borderRadius: '0.5rem', padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.8rem', cursor: 'pointer', textAlign: 'left', transition: 'color 0.15s, border-color 0.15s', fontFamily: 'DM Sans, sans-serif' }}
+                onMouseEnter={(e) => { const el = e.currentTarget; el.style.color = 'var(--text-primary)'; el.style.borderColor = 'var(--accent)33' }}
+                onMouseLeave={(e) => { const el = e.currentTarget; el.style.color = 'var(--text-muted)'; el.style.borderColor = 'var(--border-subtle)' }}
               >
                 {t}
               </button>
@@ -413,15 +309,7 @@ export default function NewSessionPage() {
 
         {/* Duration selector */}
         <section style={{ marginBottom: '2rem' }}>
-          <h2
-            style={{
-              fontSize: '0.875rem',
-              color: 'var(--text-muted)',
-              marginBottom: 10,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
+          <h2 style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Duration
             {selectedMode === 'guided' && (
               <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>
@@ -430,24 +318,11 @@ export default function NewSessionPage() {
             )}
           </h2>
           <div style={{ display: 'flex', gap: 8 }}>
-            {DURATIONS.map(({ value, label }) => (
+            {currentDurations.map(({ value, label }) => (
               <button
                 key={value}
                 onClick={() => setDuration(value)}
-                style={{
-                  flex: 1,
-                  padding: '0.625rem',
-                  background: duration === value ? 'var(--accent)' : 'var(--bg-card)',
-                  border: `1.5px solid ${duration === value ? 'var(--accent)' : 'var(--border-subtle)'}`,
-                  borderRadius: '0.75rem',
-                  color: duration === value ? '#0F1B2D' : 'var(--text-primary)',
-                  fontFamily: 'Syne, sans-serif',
-                  fontWeight: 700,
-                  fontSize: '0.875rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  minHeight: 44,
-                }}
+                style={{ flex: 1, padding: '0.625rem', background: duration === value ? 'var(--accent)' : 'var(--bg-card)', border: `1.5px solid ${duration === value ? 'var(--accent)' : 'var(--border-subtle)'}`, borderRadius: '0.75rem', color: duration === value ? '#0F1B2D' : 'var(--text-primary)', fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer', transition: 'all 0.15s', minHeight: 44 }}
               >
                 {label}
               </button>

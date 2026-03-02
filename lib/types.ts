@@ -35,6 +35,14 @@ export type GuidedDrillType =
   | 'strong_close'
   | 'prep_response'
 
+export type PresentationAudience =
+  | 'executives'
+  | 'general'
+  | 'technical'
+  | 'investors'
+  | 'students'
+  | 'clients'
+
 export interface GuidedDrill {
   type: GuidedDrillType
   name: string
@@ -69,6 +77,7 @@ export interface Session {
   mode: SessionMode
   topic: string | null
   guided_drill: string | null
+  presentation_audience: string | null
   duration_seconds: number
   transcript: string | null
   wpm: number | null

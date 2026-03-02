@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { CoachingStyle, Goal, GuidedDrillType, SpeechAnalysis, SpeechProfile } from './types'
+import type { CoachingStyle, Goal, GuidedDrillType, PresentationAudience, SpeechAnalysis, SpeechProfile } from './types'
 
 const GUIDED_DRILL_RUBRICS: Record<GuidedDrillType, { name: string; steps: string[] }> = {
   hook: {
@@ -49,6 +49,40 @@ const GUIDED_DRILL_RUBRICS: Record<GuidedDrillType, { name: string; steps: strin
   },
 }
 
+const AUDIENCE_CONTEXT: Record<PresentationAudience, string> = {
+  executives: 'C-suite or board members. They value brevity, ROI, strategic impact, and decisiveness. They are time-poor and have low tolerance for filler or rambling.',
+  general: 'A mixed general audience. Balance accessibility with substance. Avoid jargon, use relatable examples, and keep energy high.',
+  technical: 'Engineers, analysts, or domain experts. They appreciate precision, data, and depth. Vague claims and hand-waving will lose them.',
+  investors: 'Investors or pitch committee. They want a clear narrative arc: problem → solution → market opportunity → traction → ask. Confidence and specificity are critical.',
+  students: 'A student audience in a learning context. Prioritize clarity, relatable examples, and engagement. Check for over-complexity.',
+  clients: 'Current or potential clients. They care about their problem being understood, the solution being clear, and trust being established. Benefits over features.',
+}
+
+function buildPresentationSimSection(audience: PresentationAudience, durationSeconds: number): string {
+  const minutes = Math.round(durationSeconds / 60)
+  return `
+SESSION MODE: Presentation Sim
+Audience: ${audience} — ${AUDIENCE_CONTEXT[audience]}
+Time limit: ${minutes} minutes
+
+Evaluate specifically for a full presentation delivery:
+1. Opening impact — did they hook the audience within the first 30 seconds?
+2. Audience calibration — was vocabulary, depth, and framing appropriate for ${audience}?
+3. Structure — clear intro, developed body, strong conclusion?
+4. Transition quality — did sections flow logically, or were there jarring jumps?
+5. Confidence language — assertive and direct, or hedging ("I think maybe", "sort of", "I'm not sure but")?
+6. Closing strength — did they land a clear takeaway and call to action?
+7. Time efficiency — did they fill the time purposefully, or rush/pad?
+
+In your coaching_feedback:
+- At least one "strength" item focused on a presentation-specific success
+- At least one "improvement" item for the most critical presentation weakness
+- One "tip" with a concrete technique they can apply next time
+- The structure_score should weigh presentation flow heavily
+- In the summary, give a "presentation readiness" verdict: is this ready to deliver, nearly there, or needs more work?
+`
+}
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 function buildGuidedDrillSection(drillType: GuidedDrillType): string {
@@ -72,7 +106,9 @@ function buildSystemPrompt(
   goal: Goal,
   speechProfile: SpeechProfile,
   mode?: string,
-  guidedDrill?: GuidedDrillType | null
+  guidedDrill?: GuidedDrillType | null,
+  presentationAudience?: PresentationAudience | null,
+  durationSeconds?: number
 ): string {
   return `You are a certified speech and presentation coach with credentials from Toastmasters and the Professional Speakers Association. You are analyzing a recorded speech session to provide structured, actionable coaching feedback.
 
@@ -117,7 +153,7 @@ Return ONLY valid JSON. No markdown, no explanation, no wrapper text. Exactly th
   "summary": "A solid session with good energy. Your pacing is a real strength. Primary focus for next session: filler word reduction in transitions."
 }
 
-For stutter_aware profiles, wpm and filler fields will be present in the JSON but set to null. Do not populate them.${mode === 'guided' && guidedDrill ? buildGuidedDrillSection(guidedDrill) : ''}`
+For stutter_aware profiles, wpm and filler fields will be present in the JSON but set to null. Do not populate them.${mode === 'guided' && guidedDrill ? buildGuidedDrillSection(guidedDrill) : ''}${mode === 'presentation_sim' && presentationAudience ? buildPresentationSimSection(presentationAudience, durationSeconds ?? 180) : ''}`
 }
 
 function buildUserPrompt(
@@ -125,13 +161,17 @@ function buildUserPrompt(
   durationSeconds: number,
   speechProfile: SpeechProfile,
   mode?: string,
-  guidedDrill?: GuidedDrillType | null
+  guidedDrill?: GuidedDrillType | null,
+  presentationAudience?: PresentationAudience | null
 ): string {
   const minutes = Math.round(durationSeconds / 60)
   const drillContext = mode === 'guided' && guidedDrill
     ? `\nThe speaker was practicing the "${GUIDED_DRILL_RUBRICS[guidedDrill].name}" guided drill. Evaluate structure adherence to the drill steps specifically.\n`
     : ''
-  return `Please analyze this speech transcript from a ${minutes}-minute recording session.${drillContext}
+  const simContext = mode === 'presentation_sim' && presentationAudience
+    ? `\nThis was a ${minutes}-minute presentation simulation for a ${presentationAudience} audience. Evaluate as a full presentation run-through.\n`
+    : ''
+  return `Please analyze this speech transcript from a ${minutes}-minute recording session.${drillContext}${simContext}
 
 ${speechProfile === 'standard' ? `Recording duration: ${durationSeconds} seconds. Use this to calculate WPM from the transcript word count.` : ''}
 
@@ -151,17 +191,18 @@ export async function analyzeSpeech(params: {
   goal: Goal
   mode?: string
   guided_drill?: GuidedDrillType | null
+  presentation_audience?: PresentationAudience | null
 }): Promise<SpeechAnalysis> {
-  const { transcript, duration_seconds, coaching_style, speech_profile, goal, mode, guided_drill } = params
+  const { transcript, duration_seconds, coaching_style, speech_profile, goal, mode, guided_drill, presentation_audience } = params
 
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1500,
-    system: buildSystemPrompt(coaching_style, goal, speech_profile, mode, guided_drill),
+    system: buildSystemPrompt(coaching_style, goal, speech_profile, mode, guided_drill, presentation_audience, duration_seconds),
     messages: [
       {
         role: 'user',
-        content: buildUserPrompt(transcript, duration_seconds, speech_profile, mode, guided_drill),
+        content: buildUserPrompt(transcript, duration_seconds, speech_profile, mode, guided_drill, presentation_audience),
       },
     ],
   })

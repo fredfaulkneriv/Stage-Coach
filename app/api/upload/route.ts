@@ -6,7 +6,7 @@ import { uploadAudio, buildR2Key } from '@/lib/r2'
 import { analyzeSpeech, transcribeWithWorkersAI } from '@/lib/analyze-speech'
 import { calculateXP, getLevelFromXP, updateStreakData } from '@/lib/xp'
 import { checkAndAwardBadges } from '@/lib/check-badges'
-import type { ApiResponse, Badge, GuidedDrillType, Session, SessionMode, User } from '@/lib/types'
+import type { ApiResponse, Badge, GuidedDrillType, PresentationAudience, Session, SessionMode, User } from '@/lib/types'
 
 interface UploadResponse {
   session_id: string
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
       ? (modeRaw as SessionMode)
       : 'freestyle'
     const guided_drill = (formData.get('guided_drill') as GuidedDrillType | null) ?? null
+    const presentation_audience = (formData.get('presentation_audience') as PresentationAudience | null) ?? null
 
     if (!audioFile) {
       return NextResponse.json<ApiResponse>(
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
         goal: user.goal,
         mode,
         guided_drill,
+        presentation_audience,
       })
     } catch (analyzeError) {
       console.error('Analysis error:', analyzeError)
@@ -123,16 +125,17 @@ export async function POST(req: Request) {
     // 7. Save session to D1
     await d1Execute(
       `INSERT INTO sessions (
-        id, user_id, mode, guided_drill, topic, duration_seconds, transcript,
+        id, user_id, mode, guided_drill, presentation_audience, topic, duration_seconds, transcript,
         wpm, filler_word_count, filler_word_percentage, filler_words_found,
         pacing_score, clarity_score, structure_score, overall_score,
         coaching_feedback, summary, xp_earned, r2_key, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         sessionId,
         userId,
         mode,
         guided_drill ?? null,
+        presentation_audience ?? null,
         topic ?? null,
         duration_seconds,
         transcript,
@@ -193,6 +196,7 @@ export async function POST(req: Request) {
       user_id: userId,
       mode,
       guided_drill: guided_drill ?? null,
+      presentation_audience: presentation_audience ?? null,
       topic: topic ?? null,
       duration_seconds,
       transcript,

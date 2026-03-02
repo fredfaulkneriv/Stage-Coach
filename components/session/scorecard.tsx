@@ -7,7 +7,7 @@ import { ArrowRight, RotateCcw, Star, TrendingUp, Lightbulb } from 'lucide-react
 import { ScoreRing, SmallScoreCard } from '@/components/ui/score-ring'
 import { BadgeMini } from '@/components/ui/badge-card'
 import { LevelBar } from '@/components/ui/level-bar'
-import type { Badge, CoachingFeedbackItem, GuidedDrillType, Session, User } from '@/lib/types'
+import type { Badge, CoachingFeedbackItem, GuidedDrillType, PresentationAudience, Session, User } from '@/lib/types'
 
 const DRILL_NAMES: Record<GuidedDrillType, string> = {
   hook: 'The Hook',
@@ -15,6 +15,15 @@ const DRILL_NAMES: Record<GuidedDrillType, string> = {
   star_story: 'The STAR Story',
   strong_close: 'The Strong Close',
   prep_response: 'The PREP Response',
+}
+
+const AUDIENCE_LABELS: Record<PresentationAudience, { emoji: string; label: string }> = {
+  executives: { emoji: '💼', label: 'Executives' },
+  general: { emoji: '👥', label: 'General Audience' },
+  technical: { emoji: '💻', label: 'Technical Team' },
+  investors: { emoji: '📈', label: 'Investors' },
+  students: { emoji: '🎓', label: 'Students' },
+  clients: { emoji: '🤝', label: 'Clients' },
 }
 
 interface ScorecardViewProps {
@@ -80,7 +89,7 @@ export function ScorecardView({ session, user, recentBadges, isNew }: ScorecardV
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Session Complete
           </p>
-          {session.mode === 'guided' && (
+          {(session.mode === 'guided' || session.mode === 'presentation_sim') && (
             <span
               style={{
                 fontSize: '0.65rem',
@@ -95,18 +104,26 @@ export function ScorecardView({ session, user, recentBadges, isNew }: ScorecardV
                 letterSpacing: '0.04em',
               }}
             >
-              Guided Drill
+              {session.mode === 'guided' ? 'Guided Drill' : 'Presentation Sim'}
             </span>
           )}
         </div>
         <h1 style={{ fontSize: '1.375rem', lineHeight: 1.3 }}>
           {session.mode === 'guided' && session.guided_drill
             ? DRILL_NAMES[session.guided_drill as GuidedDrillType] ?? session.topic ?? 'Guided Session'
+            : session.mode === 'presentation_sim'
+            ? session.topic ?? 'Presentation Run-Through'
             : session.topic ?? 'Freestyle Session'}
         </h1>
         {session.mode === 'guided' && session.topic && (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 2 }}>
             {session.topic}
+          </p>
+        )}
+        {session.mode === 'presentation_sim' && session.presentation_audience && (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 2 }}>
+            {AUDIENCE_LABELS[session.presentation_audience as PresentationAudience]?.emoji}{' '}
+            {AUDIENCE_LABELS[session.presentation_audience as PresentationAudience]?.label}
           </p>
         )}
         <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 4 }}>

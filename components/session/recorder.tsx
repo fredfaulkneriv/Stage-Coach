@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Mic, Square, Loader2, CheckCircle2, Circle } from 'lucide-react'
 import { Waveform } from './waveform'
-import type { GuidedDrill } from '@/lib/types'
+import type { GuidedDrill, PresentationAudience } from '@/lib/types'
 
 type ProcessingStep = 'uploading' | 'transcribing' | 'analyzing' | null
 
@@ -13,7 +13,25 @@ interface RecorderProps {
   maxDuration: number // seconds
   mode?: string
   guidedDrill?: GuidedDrill | null
+  presentationAudience?: PresentationAudience | null
 }
+
+const AUDIENCE_LABELS: Record<PresentationAudience, { emoji: string; label: string }> = {
+  executives: { emoji: '💼', label: 'Executives' },
+  general: { emoji: '👥', label: 'General Audience' },
+  technical: { emoji: '💻', label: 'Technical Team' },
+  investors: { emoji: '📈', label: 'Investors' },
+  students: { emoji: '🎓', label: 'Students' },
+  clients: { emoji: '🤝', label: 'Clients' },
+}
+
+const PRESENTATION_TIPS = [
+  'Slow down — you can always go slower',
+  'Make eye contact with your audience',
+  'Pause after key points for impact',
+  'Project your voice with confidence',
+  'Use your hands to emphasize points',
+]
 
 const PROCESSING_MESSAGES: Record<NonNullable<ProcessingStep>, string> = {
   uploading: 'Uploading recording…',
@@ -33,7 +51,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function Recorder({ topic, maxDuration, mode = 'freestyle', guidedDrill }: RecorderProps) {
+export function Recorder({ topic, maxDuration, mode = 'freestyle', guidedDrill, presentationAudience }: RecorderProps) {
   const router = useRouter()
   const [status, setStatus] = useState<'idle' | 'recording' | 'processing'>('idle')
   const [elapsed, setElapsed] = useState(0)
@@ -42,6 +60,16 @@ export function Recorder({ topic, maxDuration, mode = 'freestyle', guidedDrill }
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checkedSteps, setCheckedSteps] = useState<Set<number>>(new Set())
+  const [tipIndex, setTipIndex] = useState(0)
+
+  // Rotate presentation tips every 20 seconds during recording
+  useEffect(() => {
+    if (mode !== 'presentation_sim' || status !== 'recording') return
+    const interval = setInterval(() => {
+      setTipIndex((i) => (i + 1) % PRESENTATION_TIPS.length)
+    }, 20000)
+    return () => clearInterval(interval)
+  }, [mode, status])
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -135,6 +163,9 @@ export function Recorder({ topic, maxDuration, mode = 'freestyle', guidedDrill }
       if (topic) formData.append('topic', topic)
       if (mode === 'guided' && guidedDrill) {
         formData.append('guided_drill', guidedDrill.type)
+      }
+      if (mode === 'presentation_sim' && presentationAudience) {
+        formData.append('presentation_audience', presentationAudience)
       }
 
       setProcessingStep('uploading')
@@ -324,7 +355,55 @@ export function Recorder({ topic, maxDuration, mode = 'freestyle', guidedDrill }
         </div>
       )}
 
-      {/* Timer */}
+      {/* Presentation Sim — audience banner + rotating tip */}
+      {mode === 'presentation_sim' && presentationAudience && (
+        <div style={{ width: '100%' }}>
+          <div
+            style={{
+              background: 'var(--bg-card)',
+              border: `1px solid ${status === 'recording' ? 'var(--accent)55' : 'var(--border-subtle)'}`,
+              borderRadius: '0.875rem',
+              padding: '0.75rem 1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 8,
+              transition: 'border-color 0.3s',
+            }}
+          >
+            <span style={{ fontSize: '1.25rem' }}>{AUDIENCE_LABELS[presentationAudience].emoji}</span>
+            <div>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Presenting to
+              </p>
+              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: '0.9rem', color: status === 'recording' ? 'var(--accent)' : 'var(--text-primary)' }}>
+                {AUDIENCE_LABELS[presentationAudience].label}
+              </p>
+            </div>
+          </div>
+          {status === 'recording' && (
+            <div
+              style={{
+                background: 'var(--accent-muted)',
+                border: '1px solid var(--accent)33',
+                borderRadius: '0.75rem',
+                padding: '0.5rem 0.875rem',
+                marginBottom: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: '0.9rem' }}>💡</span>
+              <p style={{ fontSize: '0.8rem', color: 'var(--accent)', fontStyle: 'italic' }}>
+                {PRESENTATION_TIPS[tipIndex]}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timer — countdown for presentation_sim, elapsed for all others */}
       <div style={{ textAlign: 'center' }}>
         <div
           style={{
@@ -336,11 +415,15 @@ export function Recorder({ topic, maxDuration, mode = 'freestyle', guidedDrill }
             lineHeight: 1,
           }}
         >
-          {formatTime(elapsed)}
+          {mode === 'presentation_sim' && status === 'recording'
+            ? formatTime(Math.max(0, maxDuration - elapsed))
+            : formatTime(elapsed)}
         </div>
         <div style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 4 }}>
           {status === 'recording'
-            ? `Max ${formatTime(maxDuration)}`
+            ? mode === 'presentation_sim'
+              ? 'Time remaining'
+              : `Max ${formatTime(maxDuration)}`
             : 'Tap to start recording'}
         </div>
       </div>
