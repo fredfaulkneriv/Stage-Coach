@@ -56,6 +56,8 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
   const wordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const startTimeRef = useRef<number>(0)
+  // streamRef: holds the MediaStream for cleanup without being a reactive dep
+  const streamRef = useRef<MediaStream | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([])
 
@@ -94,12 +96,18 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
     }
   }, [wordElapsed, maxWordElapsed, status, countdown]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Stable cleanup — empty deps so the effect never re-runs mid-session.
+  // Uses streamRef (not stream state) to avoid the ref being captured in a
+  // stale closure while keeping cleanup dependency-free.
   const cleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
     if (wordTimerRef.current) clearInterval(wordTimerRef.current)
     if (wakeLockRef.current) wakeLockRef.current.release().catch(() => {})
-    if (stream) stream.getTracks().forEach((t) => t.stop())
-  }, [stream])
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+  }, []) // intentionally empty — only runs on unmount
 
   useEffect(() => {
     return () => cleanup()
@@ -109,6 +117,7 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
     setError(null)
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = mediaStream
       setStream(mediaStream)
 
       if ('wakeLock' in navigator) {
@@ -178,7 +187,10 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
     timerRef.current = null
     wordTimerRef.current = null
     if (wakeLockRef.current) wakeLockRef.current.release().catch(() => {})
-    if (stream) stream.getTracks().forEach((t) => t.stop())
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
     setStream(null)
     setCountdown(null)
     setStatus('processing')
