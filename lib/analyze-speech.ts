@@ -1,12 +1,78 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { CoachingStyle, Goal, SpeechAnalysis, SpeechProfile } from './types'
+import type { CoachingStyle, Goal, GuidedDrillType, SpeechAnalysis, SpeechProfile } from './types'
+
+const GUIDED_DRILL_RUBRICS: Record<GuidedDrillType, { name: string; steps: string[] }> = {
+  hook: {
+    name: 'The Hook',
+    steps: [
+      'Opened with a grabber (stat, question, or short story — under 30 seconds)',
+      'Stated the problem or tension clearly',
+      'Bridged to why this matters to the audience',
+      'Previewed what they would cover',
+    ],
+  },
+  three_point: {
+    name: 'The Three-Point Structure',
+    steps: [
+      'Stated the main message in one clear sentence',
+      'Made Point 1 with a supporting detail or example',
+      'Made Point 2 with a supporting detail or example',
+      'Made Point 3 with a supporting detail or example',
+      'Summarized and restated the main message',
+    ],
+  },
+  star_story: {
+    name: 'The STAR Story',
+    steps: [
+      'Situation — set the scene briefly and clearly',
+      'Task — explained the challenge or goal',
+      'Action — described specifically what they did',
+      'Result — shared what happened and what was learned',
+    ],
+  },
+  strong_close: {
+    name: 'The Strong Close',
+    steps: [
+      'Briefly recapped the 2–3 main points',
+      'Delivered a clear call to action or key takeaway',
+      'Ended with a memorable closing line',
+    ],
+  },
+  prep_response: {
+    name: 'The PREP Response',
+    steps: [
+      'Point — stated the answer or opinion directly upfront',
+      'Reason — explained why clearly',
+      'Example — gave a specific story or data point',
+      'Point — restated the answer to land it',
+    ],
+  },
+}
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+function buildGuidedDrillSection(drillType: GuidedDrillType): string {
+  const drill = GUIDED_DRILL_RUBRICS[drillType]
+  const stepsText = drill.steps.map((s, i) => `  ${i + 1}. ${s}`).join('\n')
+  return `
+SESSION MODE: Guided Drill — "${drill.name}"
+The speaker was practicing this specific structure. Evaluate how well they followed each step:
+${stepsText}
+
+In your coaching_feedback, include:
+- A "strength" item for each step they executed well (be specific about which step)
+- An "improvement" item for any step they missed or executed poorly
+- The structure_score should primarily reflect how well they followed these steps (not general structure principles)
+- In the summary, name which steps landed and which need work next time
+`
+}
 
 function buildSystemPrompt(
   coachingStyle: CoachingStyle,
   goal: Goal,
-  speechProfile: SpeechProfile
+  speechProfile: SpeechProfile,
+  mode?: string,
+  guidedDrill?: GuidedDrillType | null
 ): string {
   return `You are a certified speech and presentation coach with credentials from Toastmasters and the Professional Speakers Association. You are analyzing a recorded speech session to provide structured, actionable coaching feedback.
 
@@ -51,16 +117,21 @@ Return ONLY valid JSON. No markdown, no explanation, no wrapper text. Exactly th
   "summary": "A solid session with good energy. Your pacing is a real strength. Primary focus for next session: filler word reduction in transitions."
 }
 
-For stutter_aware profiles, wpm and filler fields will be present in the JSON but set to null. Do not populate them.`
+For stutter_aware profiles, wpm and filler fields will be present in the JSON but set to null. Do not populate them.${mode === 'guided' && guidedDrill ? buildGuidedDrillSection(guidedDrill) : ''}`
 }
 
 function buildUserPrompt(
   transcript: string,
   durationSeconds: number,
-  speechProfile: SpeechProfile
+  speechProfile: SpeechProfile,
+  mode?: string,
+  guidedDrill?: GuidedDrillType | null
 ): string {
   const minutes = Math.round(durationSeconds / 60)
-  return `Please analyze this speech transcript from a ${minutes}-minute recording session.
+  const drillContext = mode === 'guided' && guidedDrill
+    ? `\nThe speaker was practicing the "${GUIDED_DRILL_RUBRICS[guidedDrill].name}" guided drill. Evaluate structure adherence to the drill steps specifically.\n`
+    : ''
+  return `Please analyze this speech transcript from a ${minutes}-minute recording session.${drillContext}
 
 ${speechProfile === 'standard' ? `Recording duration: ${durationSeconds} seconds. Use this to calculate WPM from the transcript word count.` : ''}
 
@@ -78,17 +149,19 @@ export async function analyzeSpeech(params: {
   coaching_style: CoachingStyle
   speech_profile: SpeechProfile
   goal: Goal
+  mode?: string
+  guided_drill?: GuidedDrillType | null
 }): Promise<SpeechAnalysis> {
-  const { transcript, duration_seconds, coaching_style, speech_profile, goal } = params
+  const { transcript, duration_seconds, coaching_style, speech_profile, goal, mode, guided_drill } = params
 
   const message = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1500,
-    system: buildSystemPrompt(coaching_style, goal, speech_profile),
+    system: buildSystemPrompt(coaching_style, goal, speech_profile, mode, guided_drill),
     messages: [
       {
         role: 'user',
-        content: buildUserPrompt(transcript, duration_seconds, speech_profile),
+        content: buildUserPrompt(transcript, duration_seconds, speech_profile, mode, guided_drill),
       },
     ],
   })

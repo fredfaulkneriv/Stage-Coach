@@ -6,7 +6,7 @@ import { uploadAudio, buildR2Key } from '@/lib/r2'
 import { analyzeSpeech, transcribeWithWorkersAI } from '@/lib/analyze-speech'
 import { calculateXP, getLevelFromXP, updateStreakData } from '@/lib/xp'
 import { checkAndAwardBadges } from '@/lib/check-badges'
-import type { ApiResponse, Badge, Session, User } from '@/lib/types'
+import type { ApiResponse, Badge, GuidedDrillType, Session, SessionMode, User } from '@/lib/types'
 
 interface UploadResponse {
   session_id: string
@@ -25,6 +25,11 @@ export async function POST(req: Request) {
     const audioFile = formData.get('audio') as File | null
     const topic = formData.get('topic') as string | null
     const durationStr = formData.get('duration_seconds') as string | null
+    const modeRaw = (formData.get('mode') as string | null) ?? 'freestyle'
+    const mode: SessionMode = ['freestyle', 'guided', 'mirror', 'presentation_sim', 'hot_seat'].includes(modeRaw)
+      ? (modeRaw as SessionMode)
+      : 'freestyle'
+    const guided_drill = (formData.get('guided_drill') as GuidedDrillType | null) ?? null
 
     if (!audioFile) {
       return NextResponse.json<ApiResponse>(
@@ -81,6 +86,8 @@ export async function POST(req: Request) {
         coaching_style: user.coaching_style,
         speech_profile: user.speech_profile,
         goal: user.goal,
+        mode,
+        guided_drill,
       })
     } catch (analyzeError) {
       console.error('Analysis error:', analyzeError)
@@ -116,14 +123,16 @@ export async function POST(req: Request) {
     // 7. Save session to D1
     await d1Execute(
       `INSERT INTO sessions (
-        id, user_id, mode, topic, duration_seconds, transcript,
+        id, user_id, mode, guided_drill, topic, duration_seconds, transcript,
         wpm, filler_word_count, filler_word_percentage, filler_words_found,
         pacing_score, clarity_score, structure_score, overall_score,
         coaching_feedback, summary, xp_earned, r2_key, created_at
-      ) VALUES (?, ?, 'freestyle', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         sessionId,
         userId,
+        mode,
+        guided_drill ?? null,
         topic ?? null,
         duration_seconds,
         transcript,
@@ -182,7 +191,8 @@ export async function POST(req: Request) {
     const session: Session = {
       id: sessionId,
       user_id: userId,
-      mode: 'freestyle',
+      mode,
+      guided_drill: guided_drill ?? null,
       topic: topic ?? null,
       duration_seconds,
       transcript,

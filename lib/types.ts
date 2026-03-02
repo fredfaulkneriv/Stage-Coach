@@ -28,6 +28,21 @@ export type SessionMode =
   | 'presentation_sim'
   | 'hot_seat'
 
+export type GuidedDrillType =
+  | 'hook'
+  | 'three_point'
+  | 'star_story'
+  | 'strong_close'
+  | 'prep_response'
+
+export interface GuidedDrill {
+  type: GuidedDrillType
+  name: string
+  description: string
+  steps: { label: string; hint: string }[]
+  recommendedDuration: number // seconds
+}
+
 export interface User {
   id: string
   email: string
@@ -53,6 +68,7 @@ export interface Session {
   user_id: string
   mode: SessionMode
   topic: string | null
+  guided_drill: string | null
   duration_seconds: number
   transcript: string | null
   wpm: number | null

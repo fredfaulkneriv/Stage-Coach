@@ -2,14 +2,17 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mic, Square, Loader2 } from 'lucide-react'
+import { Mic, Square, Loader2, CheckCircle2, Circle } from 'lucide-react'
 import { Waveform } from './waveform'
+import type { GuidedDrill } from '@/lib/types'
 
 type ProcessingStep = 'uploading' | 'transcribing' | 'analyzing' | null
 
 interface RecorderProps {
   topic: string | null
   maxDuration: number // seconds
+  mode?: string
+  guidedDrill?: GuidedDrill | null
 }
 
 const PROCESSING_MESSAGES: Record<NonNullable<ProcessingStep>, string> = {
@@ -30,7 +33,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-export function Recorder({ topic, maxDuration }: RecorderProps) {
+export function Recorder({ topic, maxDuration, mode = 'freestyle', guidedDrill }: RecorderProps) {
   const router = useRouter()
   const [status, setStatus] = useState<'idle' | 'recording' | 'processing'>('idle')
   const [elapsed, setElapsed] = useState(0)
@@ -38,6 +41,7 @@ export function Recorder({ topic, maxDuration }: RecorderProps) {
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [permissionDenied, setPermissionDenied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checkedSteps, setCheckedSteps] = useState<Set<number>>(new Set())
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -64,6 +68,7 @@ export function Recorder({ topic, maxDuration }: RecorderProps) {
 
   async function startRecording() {
     setError(null)
+    setCheckedSteps(new Set())
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
       setStream(mediaStream)
@@ -126,7 +131,11 @@ export function Recorder({ topic, maxDuration }: RecorderProps) {
       const formData = new FormData()
       formData.append('audio', file)
       formData.append('duration_seconds', String(duration))
+      formData.append('mode', mode)
       if (topic) formData.append('topic', topic)
+      if (mode === 'guided' && guidedDrill) {
+        formData.append('guided_drill', guidedDrill.type)
+      }
 
       setProcessingStep('uploading')
       await new Promise((r) => setTimeout(r, 400))
@@ -146,6 +155,15 @@ export function Recorder({ topic, maxDuration }: RecorderProps) {
       setStatus('idle')
       setProcessingStep(null)
     }
+  }
+
+  function toggleStep(index: number) {
+    setCheckedSteps((prev) => {
+      const next = new Set(prev)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return next
+    })
   }
 
   if (permissionDenied) {
@@ -228,10 +246,84 @@ export function Recorder({ topic, maxDuration }: RecorderProps) {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '2rem',
+        gap: '1.5rem',
         padding: '1rem 0',
       }}
     >
+      {/* Guided drill structure card */}
+      {mode === 'guided' && guidedDrill && (
+        <div
+          style={{
+            width: '100%',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--accent)33',
+            borderRadius: '0.875rem',
+            padding: '0.875rem 1rem',
+          }}
+        >
+          <p
+            style={{
+              fontSize: '0.7rem',
+              color: 'var(--accent)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              fontFamily: 'Syne, sans-serif',
+              fontWeight: 700,
+              marginBottom: 8,
+            }}
+          >
+            Structure Guide
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {guidedDrill.steps.map((step, i) => {
+              const done = checkedSteps.has(i)
+              return (
+                <button
+                  key={i}
+                  onClick={() => toggleStep(i)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px 0',
+                    textAlign: 'left',
+                    width: '100%',
+                  }}
+                >
+                  {done ? (
+                    <CheckCircle2 size={16} color="var(--success)" style={{ marginTop: 1, flexShrink: 0 }} />
+                  ) : (
+                    <Circle size={16} color="var(--text-muted)" style={{ marginTop: 1, flexShrink: 0 }} />
+                  )}
+                  <div>
+                    <span
+                      style={{
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        color: done ? 'var(--text-muted)' : 'var(--text-primary)',
+                        textDecoration: done ? 'line-through' : 'none',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {step.label}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: 4 }}>
+                      — {step.hint}
+                    </span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 8 }}>
+            Tap steps to check them off as you go
+          </p>
+        </div>
+      )}
+
       {/* Timer */}
       <div style={{ textAlign: 'center' }}>
         <div

@@ -5,7 +5,7 @@ pages_build_output_dir = ".vercel/output/static"
 [[d1_databases]]
 binding = "DB"
 database_name = "stage-coach-db"
-database_id = "YOUR_DATABASE_ID"
+database_id = "2d93ce8d-4c83-455d-b786-38c1208af978"
 
 [[r2_buckets]]
 binding = "RECORDINGS"
