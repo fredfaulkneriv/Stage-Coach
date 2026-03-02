@@ -230,6 +230,7 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
           border: `1.5px solid ${status === 'recording' ? 'var(--accent)55' : 'var(--border-subtle)'}`,
           borderRadius: '0.875rem',
           padding: '1rem',
+          overflow: 'hidden',
           transition: 'border-color 0.3s',
         }}
       >
@@ -249,6 +250,7 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
           style={{
             height: 200,
             overflowY: 'auto',
+            overflowX: 'hidden',
             lineHeight: 2,
             fontSize: '1rem',
             scrollBehavior: 'smooth',
@@ -256,7 +258,7 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
             scrollbarWidth: 'none',
           }}
         >
-          <p style={{ margin: 0, padding: '1rem 0' }}>
+          <p style={{ margin: 0, padding: '1rem 0', width: '100%', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
             {words.map((word, i) => {
               const isCurrent = i === currentWordIndex
               const isPast = i < currentWordIndex
