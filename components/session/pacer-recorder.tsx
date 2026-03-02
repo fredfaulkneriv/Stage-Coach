@@ -19,6 +19,8 @@ const PROCESSING_MESSAGES: Record<NonNullable<ProcessingStep>, string> = {
   analyzing: 'Analyzing your session…',
 }
 
+const COUNTDOWN_START = 3
+
 function getMimeType(): string {
   if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus'
   if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4'
@@ -35,6 +37,11 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
   const router = useRouter()
 
   const [status, setStatus] = useState<'idle' | 'recording' | 'processing'>('idle')
+  // countdown: 3 → 2 → 1 → null (null means words are advancing)
+  const [countdown, setCountdown] = useState<number | null>(null)
+  // wordElapsed: only increments after countdown ends — drives word highlighting
+  const [wordElapsed, setWordElapsed] = useState(0)
+  // elapsed: total recording time including countdown seconds (for display)
   const [elapsed, setElapsed] = useState(0)
   const [processingStep, setProcessingStep] = useState<ProcessingStep>(null)
   const [stream, setStream] = useState<MediaStream | null>(null)
@@ -43,7 +50,10 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  // timerRef: drives the countdown + elapsed counter
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // wordTimerRef: drives wordElapsed (starts after countdown ends)
+  const wordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
   const startTimeRef = useRef<number>(0)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -52,21 +62,22 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
   // Pre-compute words and timing
   const words = script.text.split(/\s+/).filter(Boolean)
   const scriptDuration = (words.length / targetWpm) * 60 // seconds
-  const maxDuration = Math.ceil(scriptDuration + 10) // 10s buffer
+  // buffer after script ends before auto-stop
+  const maxWordElapsed = Math.ceil(scriptDuration + 10)
 
-  // Current word index based on elapsed time
+  // Word index is driven entirely by wordElapsed (not elapsed), so the
+  // countdown gap doesn't push the highlight out of sync
   const currentWordIndex =
-    status === 'recording'
-      ? Math.min(Math.floor((elapsed / 60) * targetWpm), words.length - 1)
-      : status === 'idle'
-      ? -1
-      : words.length - 1
+    status === 'recording' && countdown === null
+      ? Math.min(Math.floor((wordElapsed / 60) * targetWpm), words.length - 1)
+      : -1
 
-  const progressPct = Math.min(elapsed / scriptDuration, 1)
+  const progressPct = Math.min(wordElapsed / scriptDuration, 1)
+  const isCountingDown = status === 'recording' && countdown !== null
 
-  // Auto-scroll to keep current word centered
+  // Auto-scroll: keep current word centered in the scroll container
   useEffect(() => {
-    if (status !== 'recording' || currentWordIndex < 0) return
+    if (currentWordIndex < 0) return
     const container = scrollContainerRef.current
     const wordEl = wordRefs.current[currentWordIndex]
     if (!container || !wordEl) return
@@ -74,17 +85,18 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
     const wordOffset = wordEl.offsetTop
     const wordHeight = wordEl.clientHeight
     container.scrollTop = wordOffset - containerHeight / 2 + wordHeight / 2
-  }, [currentWordIndex, status])
+  }, [currentWordIndex])
 
-  // Auto-stop when script duration + buffer reached
+  // Auto-stop when wordElapsed reaches max (script + 10s buffer)
   useEffect(() => {
-    if (status === 'recording' && elapsed >= maxDuration) {
+    if (status === 'recording' && countdown === null && wordElapsed >= maxWordElapsed) {
       stopRecording()
     }
-  }, [elapsed, maxDuration, status]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [wordElapsed, maxWordElapsed, status, countdown]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
+    if (wordTimerRef.current) clearInterval(wordTimerRef.current)
     if (wakeLockRef.current) wakeLockRef.current.release().catch(() => {})
     if (stream) stream.getTracks().forEach((t) => t.stop())
   }, [stream])
@@ -122,13 +134,34 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
         await uploadAndAnalyze(blob, duration, mimeType)
       }
 
+      // Start recording audio immediately — no audio lost during countdown
       recorder.start(250)
       startTimeRef.current = Date.now()
       setElapsed(0)
+      setWordElapsed(0)
+      setCountdown(COUNTDOWN_START)
       setStatus('recording')
 
+      // Phase 1: countdown timer
+      // Ticks every second, counts down COUNTDOWN_START → 1, then switches to word timer
+      let countdownVal = COUNTDOWN_START
       timerRef.current = setInterval(() => {
         setElapsed((e) => e + 1)
+        countdownVal -= 1
+        if (countdownVal > 0) {
+          setCountdown(countdownVal)
+        } else {
+          // Countdown done — clear this interval, start word advance
+          clearInterval(timerRef.current!)
+          timerRef.current = null
+          setCountdown(null)
+
+          // Phase 2: word advance timer
+          wordTimerRef.current = setInterval(() => {
+            setWordElapsed((w) => w + 1)
+            setElapsed((e) => e + 1)
+          }, 1000)
+        }
       }, 1000)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
@@ -141,9 +174,13 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
 
   function stopRecording() {
     if (timerRef.current) clearInterval(timerRef.current)
+    if (wordTimerRef.current) clearInterval(wordTimerRef.current)
+    timerRef.current = null
+    wordTimerRef.current = null
     if (wakeLockRef.current) wakeLockRef.current.release().catch(() => {})
     if (stream) stream.getTracks().forEach((t) => t.stop())
     setStream(null)
+    setCountdown(null)
     setStatus('processing')
     mediaRecorderRef.current?.stop()
   }
@@ -227,11 +264,12 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
       <div
         style={{
           background: 'var(--bg-card)',
-          border: `1.5px solid ${status === 'recording' ? 'var(--accent)55' : 'var(--border-subtle)'}`,
+          border: `1.5px solid ${isCountingDown ? 'var(--warning)55' : status === 'recording' ? 'var(--accent)55' : 'var(--border-subtle)'}`,
           borderRadius: '0.875rem',
           padding: '1rem',
           overflow: 'hidden',
           transition: 'border-color 0.3s',
+          position: 'relative',
         }}
       >
         {/* Header row */}
@@ -244,50 +282,80 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
           </span>
         </div>
 
-        {/* Scrollable word container */}
-        <div
-          ref={scrollContainerRef}
-          style={{
-            height: 200,
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            lineHeight: 2,
-            fontSize: '1rem',
-            scrollBehavior: 'smooth',
-            msOverflowStyle: 'none',
-            scrollbarWidth: 'none',
-          }}
-        >
-          <p style={{ margin: 0, padding: '1rem 0', width: '100%', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
-            {words.map((word, i) => {
-              const isCurrent = i === currentWordIndex
-              const isPast = i < currentWordIndex
-              return (
-                <span
-                  key={i}
-                  ref={(el) => { wordRefs.current[i] = el }}
-                  style={{
-                    display: 'inline',
-                    marginRight: '0.3em',
-                    color: isCurrent
-                      ? 'var(--accent)'
-                      : isPast
-                      ? 'var(--text-muted)'
-                      : 'var(--text-primary)',
-                    fontWeight: isCurrent ? 700 : 400,
-                    background: isCurrent ? 'var(--accent-muted)' : 'transparent',
-                    borderRadius: isCurrent ? '3px' : '0',
-                    padding: isCurrent ? '0 2px' : '0',
-                    fontSize: isCurrent ? '1.05rem' : '1rem',
-                    transition: 'color 0.1s, font-weight 0.1s',
-                  }}
-                >
-                  {word}
-                </span>
-              )
-            })}
-          </p>
-        </div>
+        {/* Countdown overlay — replaces scrolling text during 3-2-1 */}
+        {isCountingDown ? (
+          <div
+            style={{
+              height: 200,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'Syne, sans-serif',
+                fontWeight: 700,
+                fontSize: '5rem',
+                color: 'var(--accent)',
+                lineHeight: 1,
+                letterSpacing: '-3px',
+              }}
+            >
+              {countdown}
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              Get ready…
+            </p>
+          </div>
+        ) : (
+          /* Scrollable word container */
+          <div
+            ref={scrollContainerRef}
+            style={{
+              height: 200,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              lineHeight: 2.2,
+              fontSize: '1.2rem',
+              scrollBehavior: 'smooth',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'none',
+            }}
+          >
+            <p style={{ margin: 0, padding: '1rem 0', width: '100%', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+              {words.map((word, i) => {
+                const isCurrent = i === currentWordIndex
+                const isPast = i < currentWordIndex
+                return (
+                  <span
+                    key={i}
+                    ref={(el) => { wordRefs.current[i] = el }}
+                    style={{
+                      display: 'inline',
+                      marginRight: '0.3em',
+                      color: isCurrent
+                        ? 'var(--accent)'
+                        : isPast
+                        ? 'var(--text-muted)'
+                        : 'var(--text-primary)',
+                      fontWeight: isCurrent ? 700 : 400,
+                      background: isCurrent ? 'var(--accent-muted)' : 'transparent',
+                      borderRadius: isCurrent ? '4px' : '0',
+                      padding: isCurrent ? '0 3px' : '0',
+                      fontSize: isCurrent ? '1.3rem' : '1.2rem',
+                      transition: 'color 0.1s, font-weight 0.1s',
+                    }}
+                  >
+                    {word}
+                  </span>
+                )
+              })}
+            </p>
+          </div>
+        )}
 
         {/* Progress bar */}
         <div style={{ marginTop: 10, height: 3, background: 'var(--border-subtle)', borderRadius: 99, overflow: 'hidden' }}>
@@ -297,7 +365,7 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
               width: `${progressPct * 100}%`,
               background: progressPct >= 1 ? 'var(--success)' : 'var(--accent)',
               borderRadius: 99,
-              transition: 'width 1s linear',
+              transition: isCountingDown ? 'none' : 'width 1s linear',
             }}
           />
         </div>
@@ -310,15 +378,17 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
             fontFamily: 'Syne, sans-serif',
             fontWeight: 700,
             fontSize: '3rem',
-            color: status === 'recording' ? 'var(--accent)' : 'var(--text-muted)',
+            color: isCountingDown ? 'var(--warning)' : status === 'recording' ? 'var(--accent)' : 'var(--text-muted)',
             letterSpacing: '-2px',
             lineHeight: 1,
           }}
         >
-          {formatTime(elapsed)}
+          {formatTime(wordElapsed)}
         </div>
         <div style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', marginTop: 4 }}>
-          {status === 'recording'
+          {isCountingDown
+            ? 'Starting in…'
+            : status === 'recording'
             ? `of ${formatTime(Math.ceil(scriptDuration))} · auto-stops after script`
             : 'Read aloud as the words highlight'}
         </div>
@@ -357,14 +427,14 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
               width: 80,
               height: 80,
               borderRadius: '50%',
-              background: 'var(--error)',
+              background: isCountingDown ? 'var(--warning)' : 'var(--error)',
               border: 'none',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 0 0 8px #EF444422',
-              transition: 'transform 0.1s',
+              boxShadow: `0 0 0 8px ${isCountingDown ? '#F59E0B22' : '#EF444422'}`,
+              transition: 'background 0.3s, box-shadow 0.3s',
             }}
           >
             <Square size={28} color="white" fill="white" />
@@ -372,7 +442,7 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
         )}
       </div>
 
-      {status === 'recording' && (
+      {status === 'recording' && !isCountingDown && (
         <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem', textAlign: 'center' }}>
           Tap to stop early · auto-stops 10s after script ends
         </p>
