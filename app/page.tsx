@@ -21,7 +21,7 @@ export default async function HomePage() {
 
   const user = users[0]
 
-  const [sessionRows, badgeRows] = await Promise.all([
+  const [sessionRows, badgeRows, articulationRows] = await Promise.all([
     d1Query<Session>(
       'SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
       [userId]
@@ -30,7 +30,17 @@ export default async function HomePage() {
       'SELECT * FROM badges WHERE user_id = ? ORDER BY earned_at DESC LIMIT 3',
       [userId]
     ).catch(() => [] as Badge[]),
+    d1Query<{ max_tier: number; total: number }>(
+      `SELECT MAX(tier) as max_tier, COUNT(DISTINCT exercise_id) as total
+       FROM articulation_progress
+       WHERE user_id = ? AND score >= 60`,
+      [userId]
+    ).catch(() => [] as { max_tier: number; total: number }[]),
   ])
+
+  const articulationProgress = articulationRows.length > 0 && articulationRows[0].total > 0
+    ? { highest_tier: articulationRows[0].max_tier, total_exercises: articulationRows[0].total }
+    : undefined
 
   const lastSession =
     sessionRows.length > 0
@@ -45,7 +55,7 @@ export default async function HomePage() {
 
   return (
     <AppShell>
-      <Dashboard user={user} lastSession={lastSession} recentBadges={badgeRows} />
+      <Dashboard user={user} lastSession={lastSession} recentBadges={badgeRows} articulationProgress={articulationProgress} />
     </AppShell>
   )
 }

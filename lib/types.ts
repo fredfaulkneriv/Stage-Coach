@@ -28,6 +28,7 @@ export type SessionMode =
   | 'presentation_sim'
   | 'hot_seat'
   | 'pacer'
+  | 'articulation'
 
 export type GuidedDrillType =
   | 'hook'
@@ -119,6 +120,53 @@ export interface SpeechAnalysis {
   overall_score: number
   coaching_feedback: CoachingFeedbackItem[]
   summary: string
+}
+
+// Articulation Training types
+
+export type ArticulationExerciseType =
+  | 'sharpen'
+  | 'reframe'
+  | 'scaffold'
+  | 'power_up'
+  | 'distill'
+  | 'speak_sharp'
+
+export type ArticulationTier = 1 | 2 | 3 | 4 | 5
+
+export interface ArticulationExercise {
+  id: string
+  type: ArticulationExerciseType
+  tier: ArticulationTier
+  difficultyLevel: 1 | 2 | 3
+  title: string
+  instruction: string
+  prompt: string
+  wordLimit?: number
+  timeLimit?: number
+  hints?: string[]
+}
+
+export interface ArticulationFeedback {
+  score: number
+  strengths: string[]
+  improvements: string[]
+  example_response?: string
+  principle_reinforced: string
+}
+
+export interface ArticulationProgress {
+  id: string
+  user_id: string
+  exercise_type: ArticulationExerciseType
+  exercise_id: string
+  tier: ArticulationTier
+  difficulty_level: number
+  user_response: string
+  score: number
+  feedback: ArticulationFeedback
+  xp_earned: number
+  created_at: string
 }
 
 export interface ApiResponse<T = unknown> {

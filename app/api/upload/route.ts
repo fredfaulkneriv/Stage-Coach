@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     const topic = formData.get('topic') as string | null
     const durationStr = formData.get('duration_seconds') as string | null
     const modeRaw = (formData.get('mode') as string | null) ?? 'freestyle'
-    const mode: SessionMode = ['freestyle', 'guided', 'mirror', 'presentation_sim', 'hot_seat'].includes(modeRaw)
+    const mode: SessionMode = ['freestyle', 'guided', 'mirror', 'presentation_sim', 'hot_seat', 'pacer', 'articulation'].includes(modeRaw)
       ? (modeRaw as SessionMode)
       : 'freestyle'
     const guided_drill = (formData.get('guided_drill') as GuidedDrillType | null) ?? null

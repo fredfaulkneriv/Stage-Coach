@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Mic, History, User, Mic2 } from 'lucide-react'
+import { Home, Mic, BookOpen, History, User, Mic2 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/', icon: Home, label: 'Home' },
   { href: '/session/new', icon: Mic, label: 'Record' },
+  { href: '/train', icon: BookOpen, label: 'Train' },
   { href: '/history', icon: History, label: 'History' },
   { href: '/profile', icon: User, label: 'Profile' },
 ]

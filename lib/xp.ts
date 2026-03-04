@@ -50,6 +50,18 @@ export function getCurrentLevelThreshold(xp: number): number {
   return 0
 }
 
+export function calculateArticulationXP(params: {
+  score: number
+  current_streak: number
+  is_tier_completion: boolean
+}): number {
+  const base = 5
+  const score_bonus = params.score >= 80 ? 10 : 0
+  const streak_bonus = params.current_streak >= 3 ? 5 : 0
+  const tier_bonus = params.is_tier_completion ? 25 : 0
+  return base + score_bonus + streak_bonus + tier_bonus
+}
+
 export function updateStreakData(
   lastSessionDate: string | null,
   currentStreak: number,

@@ -135,6 +135,32 @@ In coaching_feedback:
 `
 }
 
+function buildArticulationSection(durationSeconds: number): string {
+  return `
+SESSION MODE: Articulation — Speak Sharp
+The speaker was responding to an articulation training prompt that tests precision, structure, confidence, and persuasion under time pressure.
+
+Evaluate specifically for articulate communication:
+1. Precision — Did they use specific, concrete language? No vague references or filler words?
+2. Structure — Was there a clear beginning, middle, and end? Logical flow?
+3. Confidence — Active voice, strong verbs, zero hedging ("I think maybe", "sort of")?
+4. Conciseness — Did they make their point efficiently within the time limit (${durationSeconds}s)?
+5. Persuasion — Was there a memorable framing, analogy, or closing line?
+
+Scoring for Speak Sharp:
+- pacing_score: Delivery pace and intentional pausing (0-100)
+- clarity_score: Precision and specificity of language (0-100)
+- structure_score: Logical flow and argument construction (0-100)
+- overall_score: Weighted average (30% clarity + 30% structure + 20% confidence language + 20% pacing)
+
+In coaching_feedback:
+- One "strength" about which articulation skill they demonstrated best
+- One "improvement" for the most impactful language weakness (vagueness, hedging, lack of structure)
+- One "tip" with a concrete technique to apply next time
+- In the summary: note which articulation principles they demonstrated and which need work
+`
+}
+
 function buildSystemPrompt(
   coachingStyle: CoachingStyle,
   goal: Goal,
@@ -171,7 +197,7 @@ ${
 * Flag filler words: um, uh, like, you know, so, basically, literally, right, okay — but do not flag natural connective language`
 }
 
-For stutter_aware profiles, wpm and filler fields will be present in the JSON but set to null. Do not populate them.${mode === 'guided' && guidedDrill ? buildGuidedDrillSection(guidedDrill) : ''}${mode === 'presentation_sim' && presentationAudience ? buildPresentationSimSection(presentationAudience, durationSeconds ?? 180) : ''}${mode === 'pacer' && pacerScript && pacerTargetWpm ? buildPacerSection(pacerScript, pacerTargetWpm, durationSeconds ?? 120) : ''}
+For stutter_aware profiles, wpm and filler fields will be present in the JSON but set to null. Do not populate them.${mode === 'guided' && guidedDrill ? buildGuidedDrillSection(guidedDrill) : ''}${mode === 'presentation_sim' && presentationAudience ? buildPresentationSimSection(presentationAudience, durationSeconds ?? 180) : ''}${mode === 'pacer' && pacerScript && pacerTargetWpm ? buildPacerSection(pacerScript, pacerTargetWpm, durationSeconds ?? 120) : ''}${mode === 'articulation' ? buildArticulationSection(durationSeconds ?? 60) : ''}
 
 Return ONLY valid JSON. No markdown, no explanation, no wrapper text. Exactly this shape:
 {
@@ -213,7 +239,10 @@ function buildUserPrompt(
   const pacerContext = mode === 'pacer' && pacerTargetWpm
     ? `\nThis is a Pacer session. The speaker read a script at a target of ${pacerTargetWpm} WPM. Compare this transcript to the target script provided in the system prompt and apply the Pacer scoring rubric.\n`
     : ''
-  return `Please analyze this speech transcript from a ${minutes}-minute recording session.${drillContext}${simContext}${pacerContext}
+  const articulationContext = mode === 'articulation'
+    ? `\nThis is a Speak Sharp articulation exercise. The speaker was responding to a timed scenario prompt. Evaluate for precision of language, logical structure, confident phrasing, and persuasive delivery.\n`
+    : ''
+  return `Please analyze this speech transcript from a ${minutes}-minute recording session.${drillContext}${simContext}${pacerContext}${articulationContext}
 
 ${speechProfile === 'standard' ? `Recording duration: ${durationSeconds} seconds. Use this to calculate WPM from the transcript word count.` : ''}
 

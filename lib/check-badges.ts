@@ -52,6 +52,27 @@ export const ALL_BADGES: BadgeDefinition[] = [
     name: 'Strong Opener',
     description: 'Received feedback praising your opening in 3 separate sessions.',
   },
+  // Articulation Training badges
+  {
+    key: 'word_smith',
+    name: 'Word Smith',
+    description: 'Scored 80+ on 5 Sharpen exercises.',
+  },
+  {
+    key: 'silver_tongue',
+    name: 'Silver Tongue',
+    description: 'Completed all 5 tiers of Articulation Training.',
+  },
+  {
+    key: 'quick_thinker',
+    name: 'Quick Thinker',
+    description: 'Scored 85+ on a Speak Sharp exercise under 30 seconds.',
+  },
+  {
+    key: 'reframe_master',
+    name: 'Reframe Master',
+    description: 'Scored 90+ on 3 Reframe exercises.',
+  },
 ]
 
 interface BadgeCheckContext {
@@ -187,6 +208,81 @@ export async function checkAndAwardBadges(ctx: BadgeCheckContext): Promise<Badge
     if (openerSessions.length >= 3) {
       await tryAward(ALL_BADGES.find((b) => b.key === 'strong_opener')!)
     }
+  }
+
+  return awarded
+}
+
+// Articulation Training badge checks
+
+interface ArticulationBadgeContext {
+  userId: string
+  exerciseType: string
+  score: number
+  currentStreak: number
+  durationSeconds?: number
+}
+
+export async function checkAndAwardArticulationBadges(
+  ctx: ArticulationBadgeContext
+): Promise<Badge[]> {
+  const { userId, exerciseType, score, currentStreak, durationSeconds } = ctx
+  const awarded: Badge[] = []
+
+  async function tryAwardArticulation(def: BadgeDefinition): Promise<void> {
+    if (await hasEarnedBadge(userId, def.key)) return
+    const badge = await insertBadge(userId, null as unknown as string, def)
+    awarded.push(badge)
+  }
+
+  // word_smith — 5 sharpen exercises scored 80+
+  if (exerciseType === 'sharpen' && score >= 80) {
+    const highSharpen = await d1Query<{ id: string }>(
+      `SELECT id FROM articulation_progress
+       WHERE user_id = ? AND exercise_type = 'sharpen' AND score >= 80`,
+      [userId]
+    )
+    if (highSharpen.length >= 5) {
+      await tryAwardArticulation(ALL_BADGES.find((b) => b.key === 'word_smith')!)
+    }
+  }
+
+  // reframe_master — 3 reframe exercises scored 90+
+  if (exerciseType === 'reframe' && score >= 90) {
+    const highReframe = await d1Query<{ id: string }>(
+      `SELECT id FROM articulation_progress
+       WHERE user_id = ? AND exercise_type = 'reframe' AND score >= 90`,
+      [userId]
+    )
+    if (highReframe.length >= 3) {
+      await tryAwardArticulation(ALL_BADGES.find((b) => b.key === 'reframe_master')!)
+    }
+  }
+
+  // quick_thinker — speak_sharp, score 85+, duration <= 30s
+  if (exerciseType === 'speak_sharp' && score >= 85 && durationSeconds != null && durationSeconds <= 30) {
+    await tryAwardArticulation(ALL_BADGES.find((b) => b.key === 'quick_thinker')!)
+  }
+
+  // silver_tongue — all 5 tiers completed (at least 5 exercises per tier scored 60+)
+  const tierCounts = await d1Query<{ tier: number; cnt: number }>(
+    `SELECT tier, COUNT(DISTINCT exercise_id) as cnt
+     FROM articulation_progress
+     WHERE user_id = ? AND score >= 60
+     GROUP BY tier`,
+    [userId]
+  )
+  const completedTiers = tierCounts.filter((t) => t.cnt >= 5).length
+  if (completedTiers >= 5) {
+    await tryAwardArticulation(ALL_BADGES.find((b) => b.key === 'silver_tongue')!)
+  }
+
+  // Streak badges also apply (iron_mic_7, iron_mic_30)
+  if (currentStreak >= 7) {
+    await tryAwardArticulation(ALL_BADGES.find((b) => b.key === 'iron_mic_7')!)
+  }
+  if (currentStreak >= 30) {
+    await tryAwardArticulation(ALL_BADGES.find((b) => b.key === 'iron_mic_30')!)
   }
 
   return awarded
