@@ -59,6 +59,7 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
   // streamRef: holds the MediaStream for cleanup without being a reactive dep
   const streamRef = useRef<MediaStream | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const teleprompterPRef = useRef<HTMLParagraphElement | null>(null)
   const wordRefs = useRef<(HTMLSpanElement | null)[]>([])
 
   // Pre-compute words and timing
@@ -77,16 +78,24 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
   const progressPct = Math.min(wordElapsed / scriptDuration, 1)
   const isCountingDown = status === 'recording' && countdown !== null
 
-  // Auto-scroll: keep current word centered in the scroll container
+  // Auto-scroll: center the current word by CSS-transforming the <p> element.
+  // The container has position:relative, so wordEl.offsetTop is relative to it.
+  // We translate the <p> so the current word sits at the vertical center.
   useEffect(() => {
-    if (currentWordIndex < 0) return
+    const pEl = teleprompterPRef.current
+    if (!pEl) return
+    if (currentWordIndex < 0) {
+      pEl.style.transform = 'translateY(0px)'
+      return
+    }
     const container = scrollContainerRef.current
     const wordEl = wordRefs.current[currentWordIndex]
     if (!container || !wordEl) return
     const containerHeight = container.clientHeight
-    const wordOffset = wordEl.offsetTop
+    const wordOffset = wordEl.offsetTop   // relative to container (position:relative)
     const wordHeight = wordEl.clientHeight
-    container.scrollTop = wordOffset - containerHeight / 2 + wordHeight / 2
+    const shift = containerHeight / 2 - wordOffset - wordHeight / 2
+    pEl.style.transform = `translateY(${shift}px)`
   }, [currentWordIndex])
 
   // Auto-stop when wordElapsed reaches max (script + 10s buffer)
@@ -329,42 +338,48 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
               ref={scrollContainerRef}
               style={{
                 height: 300,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                lineHeight: 2.0,
-                scrollBehavior: 'smooth',
-                msOverflowStyle: 'none',
-                scrollbarWidth: 'none',
+                overflow: 'hidden',
+                position: 'relative',
                 textAlign: 'center',
               }}
             >
-              <p style={{ margin: 0, padding: '100px 0.75rem', width: '100%' }}>
+              <p
+                ref={teleprompterPRef}
+                style={{
+                  margin: 0,
+                  paddingTop: 150,
+                  paddingBottom: 150,
+                  lineHeight: 2.0,
+                  transition: 'transform 0.25s ease',
+                  fontSize: '1.75rem',
+                }}
+              >
                 {words.map((word, i) => {
                   const isCurrent = i === currentWordIndex
                   const isPast = i < currentWordIndex
                   return (
-                    <span
-                      key={i}
-                      ref={(el) => { wordRefs.current[i] = el }}
-                      style={{
-                        display: 'inline',
-                        marginRight: '0.35em',
-                        color: isCurrent
-                          ? 'var(--accent)'
-                          : isPast
-                          ? 'var(--text-muted)'
-                          : 'var(--text-primary)',
-                        fontWeight: isCurrent ? 800 : isPast ? 400 : 500,
-                        fontSize: isCurrent ? '2.2rem' : '1.75rem',
-                        opacity: isPast ? 0.4 : 1,
-                        textDecoration: isCurrent ? 'underline' : 'none',
-                        textDecorationColor: 'var(--accent)',
-                        textUnderlineOffset: '6px',
-                        textDecorationThickness: '3px',
-                        transition: 'color 0.15s, font-weight 0.15s, font-size 0.1s, opacity 0.2s',
-                      }}
-                    >
-                      {word}
+                    <span key={i}>
+                      <span
+                        ref={(el) => { wordRefs.current[i] = el }}
+                        style={{
+                          color: isCurrent
+                            ? 'var(--accent)'
+                            : isPast
+                            ? 'var(--text-muted)'
+                            : 'var(--text-primary)',
+                          fontWeight: isCurrent ? 800 : isPast ? 400 : 500,
+                          fontSize: isCurrent ? '2.2rem' : '1.75rem',
+                          opacity: isPast ? 0.4 : 1,
+                          textDecoration: isCurrent ? 'underline' : 'none',
+                          textDecorationColor: 'var(--accent)',
+                          textUnderlineOffset: '6px',
+                          textDecorationThickness: '3px',
+                          transition: 'color 0.15s, font-weight 0.15s, font-size 0.1s, opacity 0.2s',
+                        }}
+                      >
+                        {word}
+                      </span>
+                      {' '}
                     </span>
                   )
                 })}
