@@ -298,7 +298,7 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
         {isCountingDown ? (
           <div
             style={{
-              height: 200,
+              height: 300,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -323,49 +323,69 @@ export function PacerRecorder({ script, targetWpm }: PacerRecorderProps) {
             </p>
           </div>
         ) : (
-          /* Scrollable word container */
-          <div
-            ref={scrollContainerRef}
-            style={{
-              height: 200,
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              lineHeight: 2.2,
-              fontSize: '1.2rem',
-              scrollBehavior: 'smooth',
-              msOverflowStyle: 'none',
-              scrollbarWidth: 'none',
-            }}
-          >
-            <p style={{ margin: 0, padding: '1rem 0', width: '100%', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
-              {words.map((word, i) => {
-                const isCurrent = i === currentWordIndex
-                const isPast = i < currentWordIndex
-                return (
-                  <span
-                    key={i}
-                    ref={(el) => { wordRefs.current[i] = el }}
-                    style={{
-                      display: 'inline',
-                      marginRight: '0.3em',
-                      color: isCurrent
-                        ? 'var(--accent)'
-                        : isPast
-                        ? 'var(--text-muted)'
-                        : 'var(--text-primary)',
-                      fontWeight: isCurrent ? 700 : 400,
-                      background: isCurrent ? 'var(--accent-muted)' : 'transparent',
-                      borderRadius: isCurrent ? '4px' : '0',
-                      padding: isCurrent ? '0 3px' : '0',
-                      fontSize: isCurrent ? '1.3rem' : '1.2rem',
-                      transition: 'color 0.1s, font-weight 0.1s',
-                    }}
-                  >
-                    {word}
-                  </span>
-                )
-              })}
-            </p>
+          /* Teleprompter word container with gradient fades */
+          <div style={{ position: 'relative' }}>
+            <div
+              ref={scrollContainerRef}
+              style={{
+                height: 300,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                lineHeight: 2.0,
+                scrollBehavior: 'smooth',
+                msOverflowStyle: 'none',
+                scrollbarWidth: 'none',
+                textAlign: 'center',
+              }}
+            >
+              <p style={{ margin: 0, padding: '100px 0.75rem', width: '100%' }}>
+                {words.map((word, i) => {
+                  const isCurrent = i === currentWordIndex
+                  const isPast = i < currentWordIndex
+                  return (
+                    <span
+                      key={i}
+                      ref={(el) => { wordRefs.current[i] = el }}
+                      style={{
+                        display: 'inline',
+                        marginRight: '0.35em',
+                        color: isCurrent
+                          ? 'var(--accent)'
+                          : isPast
+                          ? 'var(--text-muted)'
+                          : 'var(--text-primary)',
+                        fontWeight: isCurrent ? 800 : isPast ? 400 : 500,
+                        fontSize: isCurrent ? '2.2rem' : '1.75rem',
+                        opacity: isPast ? 0.4 : 1,
+                        textDecoration: isCurrent ? 'underline' : 'none',
+                        textDecorationColor: 'var(--accent)',
+                        textUnderlineOffset: '6px',
+                        textDecorationThickness: '3px',
+                        transition: 'color 0.15s, font-weight 0.15s, font-size 0.1s, opacity 0.2s',
+                      }}
+                    >
+                      {word}
+                    </span>
+                  )
+                })}
+              </p>
+            </div>
+            {/* Top gradient fade */}
+            <div style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0,
+              height: 90,
+              background: 'linear-gradient(to bottom, var(--bg-card) 15%, transparent)',
+              pointerEvents: 'none',
+            }} />
+            {/* Bottom gradient fade */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0, left: 0, right: 0,
+              height: 90,
+              background: 'linear-gradient(to top, var(--bg-card) 15%, transparent)',
+              pointerEvents: 'none',
+            }} />
           </div>
         )}
 
