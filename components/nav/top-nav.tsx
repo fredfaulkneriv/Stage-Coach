@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { Home, Mic, BookOpen, History, User, Mic2 } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { Home, Mic, BookOpen, History, User, Mic2, LogOut } from 'lucide-react'
 
 const NAV_ITEMS = [
   { href: '/', icon: Home, label: 'Home' },
@@ -14,6 +14,13 @@ const NAV_ITEMS = [
 
 export function TopNav() {
   const pathname = usePathname()
+  const router = useRouter()
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
     <nav
@@ -78,6 +85,28 @@ export function TopNav() {
           </Link>
         )
       })}
+
+      <button
+        onClick={handleLogout}
+        title="Sign out"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          color: 'var(--text-muted)',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          padding: 0,
+          fontFamily: 'inherit',
+          transition: 'color 0.15s',
+        }}
+      >
+        <LogOut size={17} />
+        Sign out
+      </button>
 
     </nav>
   )
