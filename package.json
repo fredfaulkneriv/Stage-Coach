@@ -9,7 +9,11 @@
     "lint": "eslint",
     "generate-icons": "node scripts/generate-icons.js",
     "db:migrate": "wrangler d1 execute stage-coach-db --file=migrations/001_create_tables.sql",
-    "db:migrate:local": "wrangler d1 execute stage-coach-db --local --file=migrations/001_create_tables.sql"
+    "db:migrate:local": "wrangler d1 execute stage-coach-db --local --file=migrations/001_create_tables.sql",
+    "db:migrate:002": "wrangler d1 execute stage-coach-db --remote --file=migrations/002_articulation_training.sql",
+    "db:migrate:002:local": "wrangler d1 execute stage-coach-db --local --file=migrations/002_articulation_training.sql",
+    "db:migrate:003": "wrangler d1 execute stage-coach-db --remote --file=migrations/003_better_openers.sql",
+    "db:migrate:003:local": "wrangler d1 execute stage-coach-db --local --file=migrations/003_better_openers.sql"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
